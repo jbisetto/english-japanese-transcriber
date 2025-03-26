@@ -1,47 +1,63 @@
 import re
-from typing import Dict, Any
+import mojimoji
+import jaconv
+
 
 class TextProcessor:
     def __init__(self):
-        """
-        Initializes the TextProcessor.
-        """
-        pass
+        """Initializes the TextProcessor."""
+        # Compile regex patterns for efficiency
+        self.whitespace_pattern = re.compile(r'\s+')
+        self.ascii_pattern = re.compile(r'[a-zA-Z0-9()[\]{}]')
 
     def process_japanese_text(self, text: str) -> str:
-        """
-        Processes Japanese text to ensure proper kanji usage and formatting.
-
+        """Process Japanese text for proper formatting and character width.
+        
+        Handles:
+        - Whitespace normalization (converts to full-width spaces)
+        - Full-width ASCII conversion
+        - Number conversion to full-width
+        - Proper Japanese punctuation
+        - Line break normalization
+        
         Args:
             text (str): The Japanese text to process.
-
         Returns:
-            str: The processed Japanese text.
+            str: The processed Japanese text with full-width characters.
         """
-        # Basic formatting: Remove extra spaces and newlines
-        text = re.sub(r"\s+", " ", text).strip()
+        # First normalize all whitespace to single ASCII spaces
+        text = self.whitespace_pattern.sub(' ', text)
+        
+        # Convert numbers and ASCII characters to full-width, excluding spaces
+        text = mojimoji.han_to_zen(text, digit=True, ascii=True, kana=False)
+        
+        # Normalize Japanese characters (half-width kana to full-width)
+        text = jaconv.h2z(text, kana=True, ascii=False, digit=False)
+        
+        # Convert brackets to their proper Japanese forms
+        text = text.replace('(', '（').replace(')', '）')
+        text = text.replace('[', '［').replace(']', '］')
+        text = text.replace('{', '｛').replace('}', '｝')
+        
+        # Convert ASCII spaces to Japanese full-width spaces (U+3000)
+        text = text.replace(' ', '　')
+        
+        return text.strip()
 
-        # Placeholder for kanji handling: Replace placeholder characters with actual kanji
-        text = text.replace("[kanji]", "漢字")  # Example: Replace "[kanji]" with "漢字"
-
-        return text
 
     def process_text(self, text: str, language_code: str) -> str:
-        """
-        Processes text based on the language code.
+        """Process text based on the language code.
 
         Args:
             text (str): The text to process.
-            language_code (str): The language code of the text (e.g., "en" for English, "ja" for Japanese).
-
+            language_code (str): The language code (e.g., "en" for English).
         Returns:
             str: The processed text.
         """
         if language_code == "ja":
             return self.process_japanese_text(text)
-        else:
-            # Basic formatting for other languages: Remove extra spaces and newlines
-            return re.sub(r"\s+", " ", text).strip()
+        
+        return self.whitespace_pattern.sub(' ', text).strip()
 
 if __name__ == '__main__':
     # Example usage
