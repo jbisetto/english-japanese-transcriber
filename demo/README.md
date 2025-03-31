@@ -18,12 +18,12 @@ A Gradio-based demo interface for the English-Japanese transcription system. Thi
   - [x] Service status indicators
 
 ### Audio Handling
-- [ ] Audio Input System
-  - [ ] Microphone detection
-  - [ ] Recording management
-  - [ ] File upload handling
-  - [ ] Audio format validation
-  - [ ] Recordings directory management
+- [x] Audio Input System
+  - [x] Microphone detection
+  - [x] Recording management
+  - [x] File upload handling
+  - [x] Audio format validation
+  - [x] Recordings directory management
 
 ### Debug and Logging
 - [ ] Debug System
