@@ -33,11 +33,11 @@ A Gradio-based demo interface for the English-Japanese transcription system. Thi
   - [x] Logging configuration
 
 ### Output Processing
-- [ ] Output Handlers
-  - [ ] Format processors (TXT, JSON, SRT)
-  - [ ] Pretty printing
-  - [ ] Language-specific formatting
-  - [ ] Output preview
+- [x] Output Handlers
+  - [x] Format processors (TXT, JSON, SRT)
+  - [x] Pretty printing
+  - [x] Language-specific formatting
+  - [x] Output preview
 
 ### Resource Management
 - [ ] Resource System
