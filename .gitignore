@@ -56,4 +56,8 @@ log/
 output/
 *.wav
 *.mp3
-*.m4a 
+*.m4a
+
+# Demo recordings
+demo/recordings/*
+!demo/recordings/.gitkeep 
