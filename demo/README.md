@@ -26,11 +26,11 @@ A Gradio-based demo interface for the English-Japanese transcription system. Thi
   - [x] Recordings directory management
 
 ### Debug and Logging
-- [ ] Debug System
-  - [ ] Custom logger setup
-  - [ ] Debug output formatting
-  - [ ] Error tracking
-  - [ ] Logging configuration
+- [x] Debug System
+  - [x] Custom logger setup
+  - [x] Debug output formatting
+  - [x] Error tracking
+  - [x] Logging configuration
 
 ### Output Processing
 - [ ] Output Handlers
