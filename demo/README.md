@@ -42,10 +42,11 @@ A Gradio-based demo interface for the English-Japanese transcription system. Thi
   - [x] Output handler tests
 
 ### Resource Management
-- [x] Temporary file cleanup
-- [x] Recording cleanup
-- [x] Resource monitoring
-- [x] System health checks
+- [x] Resource Management
+  - [x] Temporary file cleanup
+  - [x] Recording cleanup
+  - [x] Resource monitoring
+  - [x] System health checks
 - [x] Resource manager tests
 
 ### User Interface

@@ -10,8 +10,8 @@ This module handles:
 
 import os
 from enum import Enum
-from typing import Optional
-from dataclasses import dataclass
+from typing import Optional, List
+from dataclasses import dataclass, field
 from pathlib import Path
 
 # Import the main project's configuration
@@ -27,14 +27,21 @@ class CloudProvider(Enum):
 
 @dataclass
 class DemoConfig:
-    """Configuration settings for the demo interface."""
+    """Configuration for the demo interface."""
+    
+    supported_formats: List[str] = field(default_factory=lambda: ["mp3", "wav", "m4a", "flac"])
+    language_options: List[str] = field(default_factory=lambda: ["auto-detect", "force-english", "force-japanese"])
+    
+    # Thresholds for resource management
+    disk_threshold: float = 90.0  # Percentage
+    memory_threshold: float = 80.0  # Percentage
+    min_free_space: float = 500.0  # MB
+    
     # Audio settings
-    SUPPORTED_FORMATS: tuple = ("mp3", "wav", "m4a", "flac")
     MAX_DURATION_SECONDS: int = 300  # 5 minutes max for JLPT N5 level content
     TEMP_RECORDING_PATH: str = str(Path(__file__).parent / "recordings" / "temp_recording.wav")
     
     # UI settings
-    LANGUAGE_OPTIONS: tuple = ("auto-detect", "force-english", "force-japanese")
     SEGMENTATION_OPTIONS: tuple = ("silence-based", "fixed-length", "energy-based")
     OUTPUT_FORMATS: tuple = ("txt", "json", "srt")
     

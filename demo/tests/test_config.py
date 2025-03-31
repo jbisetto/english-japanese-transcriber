@@ -27,17 +27,17 @@ class TestDemoConfig(unittest.TestCase):
     def test_supported_formats(self):
         """Test supported audio formats."""
         config = DemoConfig()
-        self.assertIn("mp3", config.SUPPORTED_FORMATS)
-        self.assertIn("wav", config.SUPPORTED_FORMATS)
-        self.assertIn("m4a", config.SUPPORTED_FORMATS)
-        self.assertIn("flac", config.SUPPORTED_FORMATS)
+        self.assertIn("mp3", config.supported_formats)
+        self.assertIn("wav", config.supported_formats)
+        self.assertIn("m4a", config.supported_formats)
+        self.assertIn("flac", config.supported_formats)
     
     def test_language_options(self):
         """Test language options."""
         config = DemoConfig()
-        self.assertIn("auto-detect", config.LANGUAGE_OPTIONS)
-        self.assertIn("force-english", config.LANGUAGE_OPTIONS)
-        self.assertIn("force-japanese", config.LANGUAGE_OPTIONS)
+        self.assertIn("auto-detect", config.language_options)
+        self.assertIn("force-english", config.language_options)
+        self.assertIn("force-japanese", config.language_options)
 
 class TestServiceDetector(unittest.TestCase):
     """Tests for the ServiceDetector class."""

@@ -156,6 +156,40 @@ class OutputHandler:
         
         return '\n'.join(srt_parts)
     
+    def format_as_txt_english(self, transcription: Dict[str, Any]) -> str:
+        """Format transcription as English text.
+        
+        Args:
+            transcription: The transcription data
+            
+        Returns:
+            str: Formatted English text
+        """
+        if not transcription:
+            return ""
+            
+        text = transcription.get('text', '')
+        if isinstance(text, list):
+            return "\n".join(text)
+        return str(text)
+        
+    def format_as_txt_japanese(self, transcription: Dict[str, Any]) -> str:
+        """Format transcription as Japanese text.
+        
+        Args:
+            transcription: The transcription data
+            
+        Returns:
+            str: Formatted Japanese text
+        """
+        if not transcription:
+            return ""
+            
+        text = transcription.get('text', '')
+        if isinstance(text, list):
+            return "。\n".join(text) + "。"
+        return str(text)
+    
     def save_output(
         self,
         transcription: Dict[str, Any],
@@ -226,4 +260,38 @@ class OutputHandler:
         
         if len(content) > max_length:
             return content[:max_length] + "..."
-        return content 
+        return content
+    
+    def format_output(
+        self,
+        transcription: Dict[str, Any],
+        format: str = "txt",
+        language: str = "auto-detect"
+    ) -> str:
+        """Format the transcription output.
+        
+        Args:
+            transcription: The transcription data
+            format: Output format (txt, json, srt)
+            language: Language option for formatting
+            
+        Returns:
+            str: Formatted output
+            
+        Raises:
+            OutputFormatError: If format is invalid
+        """
+        if format not in ["txt", "json", "srt"]:
+            raise OutputFormatError(f"Invalid output format: {format}")
+            
+        if format == "txt":
+            if language == "force-japanese":
+                return self.format_as_txt_japanese(transcription)
+            else:
+                return self.format_as_txt_english(transcription)
+                
+        elif format == "json":
+            return self.format_as_json(transcription)
+            
+        else:  # srt
+            return self.format_as_srt(transcription) 
