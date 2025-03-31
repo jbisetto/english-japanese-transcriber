@@ -1,11 +1,28 @@
 """Audio and output handling package for the demo interface."""
 
-from .audio_handler import AudioHandler, AudioValidationError
-from .output_handler import OutputHandler, OutputFormatError
+from ..utils.errors import (
+    DemoError,
+    AudioValidationError,
+    AudioProcessingError,
+    OutputFormatError,
+    TranscriptionError,
+    LanguageDetectionError,
+    ServiceUnavailableError,
+    ResourceError
+)
+
+from .audio_handler import AudioHandler
+from .output_handler import OutputHandler
 
 __all__ = [
     'AudioHandler',
-    'AudioValidationError',
     'OutputHandler',
-    'OutputFormatError'
+    'DemoError',
+    'AudioValidationError',
+    'AudioProcessingError',
+    'OutputFormatError',
+    'TranscriptionError',
+    'LanguageDetectionError',
+    'ServiceUnavailableError',
+    'ResourceError'
 ]

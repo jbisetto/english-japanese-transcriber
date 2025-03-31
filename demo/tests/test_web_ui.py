@@ -3,111 +3,127 @@
 import pytest
 import gradio as gr
 from pathlib import Path
-import tempfile
-import shutil
-import os
-import numpy as np
-import scipy.io.wavfile as wavfile
+from unittest.mock import Mock, patch
+from datetime import datetime
 
 from demo.interface.web_ui import TranscriptionUI
-from demo.config import DemoConfig
-from demo.utils.resource_manager import ResourceManager
+from demo.handlers import AudioHandler, OutputHandler
+from demo.utils.logger import DemoLogger
+from demo.utils.errors import AudioValidationError, TranscriptionError
 
 @pytest.fixture
-def config():
-    """Create a demo configuration for testing."""
-    return DemoConfig()
+def audio_handler():
+    """Create a mock audio handler."""
+    handler = Mock(spec=AudioHandler)
+    handler.process_upload.return_value = {'duration': 10.0, 'format': 'wav'}
+    handler.get_audio_info.return_value = {'duration': 10.0, 'format': 'wav'}
+    return handler
 
 @pytest.fixture
-def ui(config):
+def output_handler():
+    """Create a mock output handler."""
+    handler = Mock(spec=OutputHandler)
+    handler.format_output.return_value = "Test transcription output"
+    return handler
+
+@pytest.fixture
+def logger():
+    """Create a mock logger."""
+    return Mock(spec=DemoLogger)
+
+@pytest.fixture
+def ui(audio_handler, output_handler, logger):
     """Create a TranscriptionUI instance for testing."""
-    return TranscriptionUI(config)
-
-@pytest.fixture
-def test_audio():
-    """Create a test audio file with actual audio content."""
-    temp_dir = tempfile.mkdtemp()
-    audio_path = Path(temp_dir) / "test.wav"
-    
-    # Generate 1 second of silence at 44.1kHz
-    sample_rate = 44100
-    duration = 1  # seconds
-    samples = np.zeros(sample_rate * duration, dtype=np.int16)
-    
-    # Add a simple sine wave to make it non-silent
-    t = np.linspace(0, duration, sample_rate * duration)
-    frequency = 440  # Hz (A4 note)
-    samples += (32767 * 0.5 * np.sin(2 * np.pi * frequency * t)).astype(np.int16)
-    
-    # Write WAV file
-    wavfile.write(str(audio_path), sample_rate, samples)
-    
-    yield str(audio_path)
-    
-    # Cleanup
-    shutil.rmtree(temp_dir)
+    return TranscriptionUI(audio_handler, output_handler, logger)
 
 def test_init(ui):
-    """Test initialization of the web interface."""
-    assert ui.config is not None
-    assert ui.logger is not None
-    assert ui.resource_manager is not None
+    """Test initialization of TranscriptionUI."""
     assert ui.audio_handler is not None
     assert ui.output_handler is not None
-    assert ui.interface is None
-    assert isinstance(ui.progress, gr.Progress)
-    assert isinstance(ui.error_box, gr.Textbox)
-    assert not ui.error_box.visible
+    assert ui.logger is not None
+    assert ui.current_operation is None
+    assert ui.operation_start_time is None
 
 def test_build_interface(ui):
     """Test building the Gradio interface."""
-    with gr.Blocks() as _:  # Create a Gradio context
-        interface = ui.build_interface()
-    
+    interface = ui.build_interface()
     assert isinstance(interface, gr.Blocks)
-    assert ui.interface is not None
-    assert ui.status is not None
-    assert isinstance(ui.error_box, gr.Textbox)
+    assert ui.error_box is not None
+    assert ui.status_box is not None
+    assert ui.progress_bar is not None
 
 def test_handle_transcription_no_audio(ui):
     """Test transcription handling with no audio."""
     output, error = ui.handle_transcription(None, "auto-detect", "txt")
     assert output == ""
-    assert "provide an audio file" in error
+    assert "Please provide an audio file" in error
 
-def test_handle_transcription_with_audio(ui, test_audio):
-    """Test transcription handling with audio file."""
-    output, error = ui.handle_transcription(test_audio, "auto-detect", "txt")
-    assert output == "Hello, how are you? こんにちは、お元気ですか？"
+def test_handle_transcription_with_audio(ui, audio_handler, output_handler):
+    """Test transcription handling with audio."""
+    # Setup mock returns
+    audio_path = "test.wav"
+    transcription = {
+        "text": "Test transcription",
+        "segments": [{"start": 0, "end": 2, "text": "Test transcription"}]
+    }
+    ui._simulate_transcription = Mock(return_value=transcription)
+    
+    # Test successful transcription
+    output, error = ui.handle_transcription(audio_path, "auto-detect", "txt")
+    assert output == "Test transcription output"
     assert error == ""
+    
+    # Verify calls
+    audio_handler.process_upload.assert_called_once_with(audio_path)
+    output_handler.format_output.assert_called_once()
+    output_handler.save_output.assert_called_once()
+
+def test_handle_transcription_with_errors(ui, audio_handler):
+    """Test transcription handling with various errors."""
+    audio_path = "test.wav"
+    
+    # Test audio validation error
+    audio_handler.process_upload.side_effect = AudioValidationError("Invalid audio")
+    output, error = ui.handle_transcription(audio_path, "auto-detect", "txt")
+    assert output == ""
+    assert "Invalid audio" in error
+    
+    # Test transcription error
+    audio_handler.process_upload.side_effect = None
+    ui._simulate_transcription = Mock(side_effect=TranscriptionError("Failed to transcribe"))
+    output, error = ui.handle_transcription(audio_path, "auto-detect", "txt")
+    assert output == ""
+    assert "Failed to transcribe" in error
 
 def test_handle_clear(ui):
     """Test clearing the interface."""
-    audio, output, error = ui.handle_clear()
-    assert audio is None
-    assert output == ""
-    assert error == ""
+    result = ui.handle_clear()
+    assert result == (None, "", "")
+    assert ui.current_operation is None
+    assert ui.operation_start_time is None
 
-def test_get_service_status(ui):
-    """Test service status retrieval."""
-    status = ui._get_service_status()
-    assert isinstance(status, str)
-    assert any(indicator in status for indicator in ["✅", "❌"])
-    assert any(provider in status.lower() for provider in ["aws", "google", "unknown"])
-
-def test_simulate_transcription(ui):
-    """Test transcription simulation."""
-    result = ui._simulate_transcription()
+def test_update_status(ui, audio_handler):
+    """Test status updates."""
+    # Test with no audio
+    status = ui.update_status(None)
+    assert "Waiting for audio input" in status
     
-    assert isinstance(result, dict)
-    assert "text" in result
-    assert "segments" in result
-    assert "language" in result
-    assert len(result["segments"]) == 2
-    assert all(key in result["segments"][0] for key in ["start", "end", "text"])
+    # Test with valid audio
+    status = ui.update_status("test.wav")
+    assert "Audio loaded" in status
+    
+    # Test with invalid audio
+    audio_handler.get_audio_info.side_effect = Exception("Invalid audio")
+    status = ui.update_status("invalid.wav")
+    assert "Invalid audio file" in status
 
-def test_launch(ui):
-    """Test interface launch preparation."""
-    with gr.Blocks() as _:  # Create a Gradio context
-        ui.launch(prevent_thread_lock=True)
-    assert ui.interface is not None 
+def test_progress_updates(ui):
+    """Test progress bar updates."""
+    # Setup mock progress bar
+    ui.progress_bar = Mock()
+    ui.status_box = Mock()
+    
+    # Test progress updates
+    ui.progress(0.5, "Testing progress")
+    ui.progress_bar.assert_called_once_with(0.5, desc="Testing progress")
+    ui.status_box.update.assert_called_once_with(value="Testing progress") 

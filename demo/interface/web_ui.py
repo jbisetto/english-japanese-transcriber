@@ -1,107 +1,98 @@
-"""Web UI components for the English-Japanese transcription demo.
+"""Web interface for the transcription demo.
 
-This module provides the Gradio-based web interface components for audio transcription,
-including real-time feedback, progress indicators, and error handling.
+This module provides the main web interface using Gradio, with enhanced
+error handling and user feedback.
 """
 
-from typing import Dict, List, Optional, Tuple, Any
 import gradio as gr
-import logging
+import time
+from typing import Tuple, Optional, Dict, Any
 from pathlib import Path
 from datetime import datetime
 
+from ..handlers import AudioHandler, OutputHandler
 from ..utils.logger import DemoLogger
-from ..utils.resource_manager import ResourceManager
-from ..handlers.audio_handler import AudioHandler
-from ..handlers.output_handler import OutputHandler, OutputFormatError
-from ..config import DemoConfig, ServiceDetector
+from ..utils.errors import (
+    DemoError, AudioValidationError, AudioProcessingError,
+    TranscriptionError, LanguageDetectionError, ServiceUnavailableError,
+    OutputFormatError, ResourceError
+)
+from ..utils.retry_handler import retry
 
 class TranscriptionUI:
     """Main web interface for the transcription demo."""
     
-    def __init__(self, config: DemoConfig):
-        """Initialize the web interface.
+    def __init__(
+        self,
+        audio_handler: AudioHandler,
+        output_handler: OutputHandler,
+        logger: Optional[DemoLogger] = None
+    ):
+        """Initialize the web interface."""
+        self.audio_handler = audio_handler
+        self.output_handler = output_handler
+        self.logger = logger or DemoLogger()
         
-        Args:
-            config: Configuration for the demo
-        """
-        self.config = config
-        self.logger = DemoLogger()
-        self.resource_manager = ResourceManager()
-        self.audio_handler = AudioHandler()
-        self.output_handler = OutputHandler()
+        # Track operation state
+        self.current_operation: Optional[str] = None
+        self.operation_start_time: Optional[datetime] = None
         
         # Initialize interface components
-        self.interface = None
-        self.progress = gr.Progress()
-        self.status = None
-        self.error_box = gr.Textbox(
-            label="Status",
-            visible=False,
-            interactive=False
-        )
-        
+        self.error_box = None
+        self.status_box = None
+        self.progress_bar = None
+    
     def build_interface(self) -> gr.Blocks:
-        """Build the Gradio interface.
-        
-        Returns:
-            gr.Blocks: The constructed Gradio interface
-        """
+        """Build the Gradio interface with enhanced error handling."""
         with gr.Blocks(title="English-Japanese Transcriber") as interface:
             gr.Markdown("# English-Japanese Audio Transcriber")
             
+            # Status and error display
             with gr.Row():
-                # Service status indicators
-                with gr.Column(scale=1):
-                    gr.Markdown("### Service Status")
-                    self.status = gr.Label(value=self._get_service_status())
-                
-                # System health
-                with gr.Column(scale=1):
-                    gr.Markdown("### System Health")
-                    health_info = self.resource_manager.check_system_health()
-                    health_status = "✅ Good" if not health_info['needs_cleanup'] else "⚠️ Needs Cleanup"
-                    gr.Label(value=health_status)
+                self.status_box = gr.Textbox(
+                    label="System Status",
+                    value="Ready",
+                    interactive=False
+                )
+                self.error_box = gr.Textbox(
+                    label="Error Messages",
+                    value="",
+                    interactive=False,
+                    visible=False
+                )
             
+            # Progress tracking
+            self.progress_bar = gr.Progress()
+            
+            # Input components
             with gr.Row():
-                # Input section
-                with gr.Column(scale=2):
-                    gr.Markdown("### Audio Input")
-                    audio_input = gr.Audio(
-                        type="filepath",
-                        label="Record or upload audio",
-                        sources=["microphone", "upload"]
-                    )
-                    
+                audio_input = gr.Audio(
+                    label="Upload Audio or Record",
+                    type="filepath"
+                )
+                
+                with gr.Column():
                     language_select = gr.Dropdown(
-                        choices=self.config.language_options,
+                        choices=["auto-detect", "force-english", "force-japanese"],
                         value="auto-detect",
-                        label="Language Detection"
+                        label="Language Mode"
                     )
-                    
                     format_select = gr.Dropdown(
-                        choices=self.config.supported_formats,
+                        choices=["txt", "json", "srt"],
                         value="txt",
                         label="Output Format"
                     )
-                
-                # Output section
-                with gr.Column(scale=2):
-                    gr.Markdown("### Transcription Output")
-                    output_text = gr.TextArea(
-                        label="Transcription",
-                        placeholder="Transcription will appear here...",
-                        lines=10
-                    )
-                    self.error_box = gr.Textbox(
-                        label="Status",
-                        visible=False,
-                        interactive=False
-                    )
+            
+            # Output display
+            output_text = gr.Textbox(
+                label="Transcription Output",
+                lines=10,
+                interactive=False
+            )
             
             # Action buttons
             with gr.Row():
-                transcribe_btn = gr.Button("Transcribe", variant="primary")
+                transcribe_btn = gr.Button("Transcribe")
                 clear_btn = gr.Button("Clear")
             
             # Event handlers
@@ -110,128 +101,140 @@ class TranscriptionUI:
                 inputs=[audio_input, language_select, format_select],
                 outputs=[output_text, self.error_box]
             )
-            
             clear_btn.click(
                 fn=self.handle_clear,
                 inputs=[],
                 outputs=[audio_input, output_text, self.error_box]
             )
             
-            # Periodic updates
-            interface.load(
-                fn=self._get_service_status,
-                inputs=None,
-                outputs=self.status,
-                show_progress=False
+            # Update status on component changes
+            audio_input.change(
+                fn=self.update_status,
+                inputs=[audio_input],
+                outputs=[self.status_box]
             )
         
-        self.interface = interface
         return interface
     
+    def update_status(self, audio_path: Optional[str]) -> str:
+        """Update the status display based on system state."""
+        if not audio_path:
+            return "Ready - Waiting for audio input"
+        
+        try:
+            info = self.audio_handler.get_audio_info(audio_path)
+            return f"Ready - Audio loaded: {info['duration']:.1f}s, {info['format']}"
+        except Exception as e:
+            return f"Ready - Invalid audio file: {str(e)}"
+    
+    def progress(self, value: float, desc: str = "") -> None:
+        """Update progress bar and status."""
+        if self.progress_bar:
+            self.progress_bar(value, desc=desc)
+        if self.status_box:
+            self.status_box.update(value=desc)
+    
+    @retry(max_retries=3)
     def handle_transcription(
         self,
-        audio_path: str,
+        audio_path: Optional[str],
         language: str,
         output_format: str
     ) -> Tuple[str, str]:
-        """Handle the transcription process.
+        """
+        Handle the transcription process with enhanced error handling.
         
         Args:
             audio_path: Path to the audio file
-            language: Selected language option
-            output_format: Desired output format
+            language: Selected language mode
+            output_format: Selected output format
             
         Returns:
-            Tuple[str, str]: (transcription output, error message if any)
+            Tuple[str, str]: (output_text, error_message)
         """
+        # Reset error state
+        error_msg = ""
+        self.operation_start_time = datetime.now()
+        self.current_operation = "transcription"
+        
         try:
-            # Reset error state
-            error_msg = ""
-            
-            # Validate inputs
+            # Input validation
             if not audio_path:
-                error_msg = "Please provide an audio file or recording"
-                return "", error_msg
+                raise AudioValidationError("Please provide an audio file or recording")
             
             # Process audio
-            self.progress(0, desc="Processing audio...")
+            self.progress(0.1, "Processing audio...")
             audio_info = self.audio_handler.process_upload(audio_path)
             
-            # Simulate transcription (to be implemented)
-            self.progress(0.5, desc="Transcribing...")
-            transcription = self._simulate_transcription()
+            # Language detection
+            self.progress(0.3, "Detecting language...")
+            if language == "auto-detect":
+                try:
+                    detected_language = self._detect_language(audio_path)
+                    self.logger.info(f"Detected language: {detected_language}")
+                except Exception as e:
+                    raise LanguageDetectionError(f"Language detection failed: {str(e)}")
+            
+            # Transcription
+            self.progress(0.5, "Transcribing...")
+            try:
+                transcription = self._simulate_transcription()
+            except Exception as e:
+                raise TranscriptionError(f"Transcription failed: {str(e)}")
             
             # Format output
-            self.progress(0.8, desc="Formatting output...")
-            output = self.output_handler.format_output(
-                transcription=transcription,
-                format=output_format,
-                language=language
-            )
+            self.progress(0.8, "Formatting output...")
+            try:
+                output = self.output_handler.format_output(
+                    transcription=transcription,
+                    format=output_format,
+                    language=language
+                )
+            except Exception as e:
+                raise OutputFormatError(f"Output formatting failed: {str(e)}")
             
             # Save output
-            self.progress(0.9, desc="Saving output...")
+            self.progress(0.9, "Saving output...")
             self.output_handler.save_output(transcription, format=output_format)
             
-            self.progress(1.0, desc="Complete!")
+            # Complete
+            self.progress(1.0, "Complete!")
+            self.current_operation = None
             return output, error_msg
             
+        except DemoError as e:
+            self.logger.error(str(e), exc_info=e)
+            self.progress(1.0, "Error occurred")
+            return "", e.user_message
+            
         except Exception as e:
-            self.logger.error(f"Transcription error: {str(e)}")
-            return "", f"Error: {str(e)}"
+            self.logger.error(f"Unexpected error: {str(e)}", exc_info=e)
+            self.progress(1.0, "Error occurred")
+            return "", f"An unexpected error occurred: {str(e)}"
+        
+        finally:
+            if self.error_box:
+                self.error_box.update(visible=bool(error_msg))
     
     def handle_clear(self) -> Tuple[None, str, str]:
-        """Clear the interface.
-        
-        Returns:
-            Tuple[None, str, str]: (None for audio, empty string for output and error)
-        """
+        """Clear the interface and reset state."""
+        self.current_operation = None
+        self.operation_start_time = None
+        self.progress(0, "Ready")
         return None, "", ""
     
-    def _get_service_status(self) -> str:
-        """Get the current service status.
-        
-        Returns:
-            str: Status message
-        """
-        detector = ServiceDetector()
-        provider = detector.detect_provider()
-        status = detector.get_service_status()
-        
-        if status.get('status', 'unavailable') == 'available':
-            return f"✅ {provider.value} Connected"
-        else:
-            return f"❌ {provider.value} Unavailable"
+    def _detect_language(self, audio_path: str) -> str:
+        """Simulate language detection."""
+        time.sleep(1)  # Simulate processing
+        return "en"
     
     def _simulate_transcription(self) -> Dict[str, Any]:
-        """Simulate a transcription result for testing.
-        
-        Returns:
-            Dict[str, Any]: Simulated transcription data
-        """
+        """Simulate transcription for demo purposes."""
+        time.sleep(2)  # Simulate processing
         return {
-            'text': 'Hello, how are you? こんにちは、お元気ですか？',
-            'segments': [
-                {
-                    'start': 0.0,
-                    'end': 2.5,
-                    'text': 'Hello, how are you?'
-                },
-                {
-                    'start': 2.5,
-                    'end': 5.0,
-                    'text': 'こんにちは、お元気ですか？'
-                }
-            ],
-            'language': 'mixed'
-        }
-    
-    def launch(self, **kwargs) -> None:
-        """Launch the web interface.
-        
-        Args:
-            **kwargs: Additional arguments to pass to gr.launch()
-        """
-        if self.interface is None:
-            self.build_interface()
-        self.interface.launch(**kwargs) 
+            "text": "Hello, how are you? こんにちは、元気ですか？",
+            "segments": [
+                {"start": 0, "end": 2, "text": "Hello, how are you?"},
+                {"start": 2, "end": 4, "text": "こんにちは、元気ですか？"}
+            ]
+        } 
