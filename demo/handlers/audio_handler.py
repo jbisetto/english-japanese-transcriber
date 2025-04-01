@@ -13,7 +13,7 @@ import wave
 import tempfile
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict, Any
 import soundfile as sf
 import numpy as np
 from pydub import AudioSegment
@@ -84,7 +84,7 @@ class AudioHandler:
         sf.write(str(filepath), audio_data, sample_rate)
         return str(filepath)
     
-    def process_upload(self, upload_path: str) -> str:
+    def process_upload(self, upload_path: str) -> Dict[str, str]:
         """
         Process an uploaded audio file.
         
@@ -92,21 +92,35 @@ class AudioHandler:
             upload_path (str): Path to the uploaded file
             
         Returns:
-            str: Path to the processed file in recordings directory
+            Dict[str, str]: Paths to the processed files:
+                - 'playback': High-quality version for playback
+                - 'transcription': Optimized version for transcription
         """
         self.validate_format(upload_path)
         
-        # Convert to WAV for consistent processing
+        # Load audio and get original properties
         audio = AudioSegment.from_file(upload_path)
-        
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"upload_{timestamp}.wav"
-        filepath = self.recordings_dir / filename
         
-        audio.export(str(filepath), format='wav')
-        return str(filepath)
+        # Save playback version - preserve original properties
+        playback_path = self.recordings_dir / f"playback_{timestamp}.wav"
+        audio.export(str(playback_path), format='wav')
+        
+        # Create optimized version for transcription (16kHz mono)
+        transcription_path = self.recordings_dir / f"transcription_{timestamp}.wav"
+        transcription_audio = audio
+        if audio.frame_rate != 16000:
+            transcription_audio = transcription_audio.set_frame_rate(16000)
+        if audio.channels != 1:
+            transcription_audio = transcription_audio.set_channels(1)
+        transcription_audio.export(str(transcription_path), format='wav')
+        
+        return {
+            'playback': str(playback_path),
+            'transcription': str(transcription_path)
+        }
     
-    def get_audio_info(self, file_path: str) -> dict:
+    def get_audio_info(self, file_path: str) -> Dict[str, Any]:
         """
         Get information about an audio file.
         
@@ -114,7 +128,7 @@ class AudioHandler:
             file_path (str): Path to the audio file
             
         Returns:
-            dict: Audio file information
+            Dict[str, Any]: Audio file information
         """
         audio = AudioSegment.from_file(file_path)
         return {
@@ -127,33 +141,30 @@ class AudioHandler:
     
     def _cleanup_old_recordings(self, max_age_hours: int = 24) -> None:
         """
-        Clean up recordings older than specified hours.
+        Clean up old recordings.
         
         Args:
             max_age_hours (int): Maximum age of recordings in hours
         """
-        current_time = datetime.now().timestamp()
-        for file in self.recordings_dir.glob("*"):
-            if file.is_file():
-                file_age = current_time - file.stat().st_mtime
-                if file_age > (max_age_hours * 3600):
-                    file.unlink()
+        cutoff_time = datetime.now().timestamp() - (max_age_hours * 3600)
+        
+        for file in self.recordings_dir.glob("*.wav"):
+            if file.stat().st_mtime < cutoff_time:
+                file.unlink()
     
-    def list_recordings(self) -> List[dict]:
+    def list_recordings(self) -> List[Dict[str, Any]]:
         """
         List all recordings with their information.
         
         Returns:
-            List[dict]: List of recordings with their details
+            List[Dict[str, Any]]: List of recording information
         """
         recordings = []
-        for file in self.recordings_dir.glob("*"):
-            if file.is_file():
-                try:
-                    info = self.get_audio_info(str(file))
-                    info['path'] = str(file)
-                    info['created'] = datetime.fromtimestamp(file.stat().st_mtime)
-                    recordings.append(info)
-                except Exception:
-                    continue
+        for file in sorted(self.recordings_dir.glob("*.wav"), key=lambda x: x.stat().st_mtime, reverse=True):
+            info = self.get_audio_info(str(file))
+            recordings.append({
+                'path': str(file),
+                'created': datetime.fromtimestamp(file.stat().st_mtime),
+                **info
+            })
         return recordings 
