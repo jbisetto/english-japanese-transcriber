@@ -84,17 +84,17 @@ A Gradio-based demo interface for the English-Japanese transcription system. Thi
     - [x] Performance monitoring
 
 ### Testing and Documentation
-- [ ] Testing
-  - [ ] Component tests
-  - [ ] Integration tests
-  - [ ] Cleanup validation
-  - [ ] Test documentation
+- [x] Testing
+  - [x] Component tests
+  - [x] Integration tests
+  - [x] Cleanup validation
+  - [x] Test documentation
 
-- [ ] Final Documentation
-  - [ ] Update usage instructions
-  - [ ] Add configuration examples
-  - [ ] Create troubleshooting guide
-  - [ ] Remove this checklist
+- [x] Final Documentation
+  - [x] Update usage instructions
+  - [x] Add configuration examples
+  - [x] Create troubleshooting guide
+  - [x] Remove this checklist
 
 ### Logging System
 - [x] Log levels
@@ -111,11 +111,10 @@ A Gradio-based demo interface for the English-Japanese transcription system. Thi
 - [x] Interface tests
 
 ### Documentation
-- [ ] API documentation
-- [ ] Usage examples
-- [ ] Configuration guide
-- [ ] Deployment guide
-- [ ] Contributing guide
+- [x] API documentation
+- [x] Usage examples
+- [x] Configuration guide
+- [x] Deployment guide
 
 ## Features
 
@@ -142,61 +141,205 @@ cd demo
 pip install -r requirements.txt
 ```
 
-2. Ensure your environment variables are properly configured in the root `.env` file:
+2. Configure your environment variables in the root `.env` file:
+
 ```env
-# Cloud Provider Selection
+# Cloud Provider Selection (Required)
 CLOUD_PROVIDER=aws  # or google
 
-# AWS Configuration (if using AWS)
-AWS_REGION_NAME=your_region
+# AWS Configuration (Required if using AWS)
+AWS_REGION=us-east-1  # Your AWS region
 AWS_ACCESS_KEY_ID=your_access_key
 AWS_SECRET_ACCESS_KEY=your_secret_key
-AWS_S3_BUCKET=your_bucket
 
-# Google Cloud Configuration (if using Google Cloud)
+# Google Cloud Configuration (Required if using Google Cloud)
 GOOGLE_PROJECT_ID=your_project_id
 GOOGLE_CREDENTIALS_PATH=/path/to/credentials.json
+
+# Optional Configuration
+DEBUG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR
+MAX_AUDIO_LENGTH=300  # Maximum audio length in seconds
+CLEANUP_INTERVAL=3600  # Cleanup interval in seconds
 ```
 
 ## Usage
 
-1. Start the demo:
+### Starting the Demo
+
+1. Start the demo interface:
 ```bash
 python app.py
 ```
 
-2. Open your web browser to the URL shown in the console (typically http://127.0.0.1:7860)
+2. Open your web browser to the displayed URL (typically http://127.0.0.1:7860)
 
-3. Use the interface to:
-   - Upload audio files or record from microphone
-   - Select language preferences
-   - Choose segmentation method
-   - Select output format
-   - View and download transcription results
+### Using the Interface
 
-## Notes
+1. **Audio Input**
+   - Click "Record" to use your microphone
+   - Click "Upload" to select an audio file
+   - Supported formats: WAV, MP3, M4A, FLAC
 
-- The demo is optimized for short audio clips (ideal for JLPT N5 level content)
-- Recorded audio files are automatically cleaned up
-- Debug information can be accessed through the interface
-- The service status indicator shows which cloud provider is being used
+2. **Language Settings**
+   - Auto: Automatically detect language segments
+   - English: Force English transcription
+   - Japanese: Force Japanese transcription
+
+3. **Output Format**
+   - TXT: Plain text with proper spacing
+   - JSON: Detailed transcription with timing
+   - SRT: Subtitle format with timestamps
+
+4. **Controls**
+   - Transcribe: Start transcription
+   - Clear: Reset the interface
+   - Clear Output Files: Remove saved transcripts
+   - Exit: Close the application
+
+### Example Usage
+
+1. **Recording Audio**
+   ```python
+   # 1. Click "Record"
+   # 2. Speak: "Hello, world. こんにちは、世界。"
+   # 3. Click "Stop"
+   # 4. Select output format (e.g., "txt")
+   # 5. Click "Transcribe"
+   ```
+
+2. **Uploading Audio**
+   ```python
+   # 1. Click "Upload"
+   # 2. Select your audio file
+   # 3. Choose language preference
+   # 4. Select output format
+   # 5. Click "Transcribe"
+   ```
+
+### Output Examples
+
+1. **TXT Format**
+```text
+Hello, world. こんにちは、世界。
+```
+
+2. **JSON Format**
+```json
+{
+  "results": {
+    "transcripts": [{
+      "transcript": "Hello, world. こんにちは、世界。"
+    }],
+    "segments": [
+      {
+        "start_time": "0.0",
+        "end_time": "1.5",
+        "text": "Hello, world.",
+        "language": "en-US",
+        "confidence": 0.98
+      },
+      {
+        "start_time": "1.5",
+        "end_time": "3.0",
+        "text": "こんにちは、世界。",
+        "language": "ja-JP",
+        "confidence": 0.95
+      }
+    ]
+  }
+}
+```
+
+3. **SRT Format**
+```srt
+1
+00:00:00,000 --> 00:00:01,500
+Hello, world.
+
+2
+00:00:01,500 --> 00:00:03,000
+こんにちは、世界。
+```
+
+## Configuration Examples
+
+### AWS Configuration
+
+1. **Basic Setup**
+```env
+CLOUD_PROVIDER=aws
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+```
+
+2. **Advanced Setup**
+```env
+CLOUD_PROVIDER=aws
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+DEBUG_LEVEL=DEBUG
+MAX_AUDIO_LENGTH=600
+CLEANUP_INTERVAL=1800
+```
+
+### Google Cloud Configuration
+
+1. **Basic Setup**
+```env
+CLOUD_PROVIDER=google
+GOOGLE_PROJECT_ID=your_project_id
+GOOGLE_CREDENTIALS_PATH=/path/to/credentials.json
+```
+
+2. **Advanced Setup**
+```env
+CLOUD_PROVIDER=google
+GOOGLE_PROJECT_ID=your_project_id
+GOOGLE_CREDENTIALS_PATH=/path/to/credentials.json
+DEBUG_LEVEL=DEBUG
+MAX_AUDIO_LENGTH=600
+CLEANUP_INTERVAL=1800
+```
 
 ## Troubleshooting
 
-1. If microphone recording is unavailable:
-   - Check your browser's microphone permissions
-   - Verify your system's audio input settings
-   - The interface will automatically adjust to show only file upload option
+### Common Issues
 
-2. If transcription fails:
-   - Check your cloud service credentials
-   - Verify your internet connection
-   - Check the debug output for detailed error information
+1. **Microphone Not Working**
+   - Check browser permissions
+   - Verify system audio settings
+   - Try refreshing the page
 
-## Contributing
+2. **Transcription Fails**
+   - Check cloud credentials
+   - Verify internet connection
+   - Check debug logs
+   - Ensure audio format is supported
 
-Please read the main project's contributing guidelines.
+3. **Output Files Missing**
+   - Check write permissions
+   - Verify cleanup settings
+   - Check disk space
+
+### Debug Mode
+
+Enable debug mode by setting:
+```env
+DEBUG_LEVEL=DEBUG
+```
+
+Debug logs will show:
+- Audio processing details
+- Transcription API calls
+- Language detection results
+- Output formatting steps
+
+## Testing
+
+See [TESTING.md](TESTING.md) for detailed testing instructions.
 
 ## License
 
-See the main project's license file. 
+This project is licensed under the MIT License - see the LICENSE file for details. 
