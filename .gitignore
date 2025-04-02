@@ -49,11 +49,15 @@ htmlcov/
 
 # Logs
 *.log
-logs/
-log/
+demo/logs/*
+!demo/logs/.gitkeep
 
 # Output files
 output/
 *.wav
 *.mp3
-*.m4a 
+*.m4a
+
+# Demo recordings
+demo/recordings/*
+!demo/recordings/.gitkeep 

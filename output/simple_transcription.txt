@@ -1,2 +1,0 @@
-en: This is a test transcript.
-ja: これはテストのトランスクリプトです。

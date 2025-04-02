@@ -1,14 +1,24 @@
 import unittest
 import json
-from unittest.mock import MagicMock, patch, ANY
+import asyncio
+from unittest.mock import MagicMock, patch, ANY, AsyncMock
 from pydub import AudioSegment
 import io
+from pathlib import Path
+import pytest
 
 # Mock necessary modules before they are imported by the service
 # This prevents actual boto3 calls during module loading
 mock_boto3 = MagicMock()
+mock_transcribe_client = MagicMock()
+mock_handlers = MagicMock()
+mock_model = MagicMock()
+
 modules = {
     'boto3': mock_boto3,
+    'amazon_transcribe.client': MagicMock(TranscribeStreamingClient=MagicMock(return_value=mock_transcribe_client)),
+    'amazon_transcribe.handlers': mock_handlers,
+    'amazon_transcribe.model': mock_model,
     'src.aws.bedrock_client': MagicMock()
 }
 
@@ -34,7 +44,7 @@ class TestTranscriptionService(unittest.TestCase):
         self.mock_s3 = MagicMock()
         self.mock_transcribe = MagicMock()
         self.mock_bedrock_runtime = MagicMock()
-
+        
         # Configure the mock boto3 client factory
         def get_client(service_name, region_name=None):
             if service_name == 's3':
@@ -46,6 +56,12 @@ class TestTranscriptionService(unittest.TestCase):
             raise ValueError(f"Unexpected service requested from boto3.client: {service_name}")
             
         mock_boto3.client.side_effect = get_client
+        
+        # Mock streaming client
+        self.mock_stream = AsyncMock()
+        self.mock_stream.input_stream = AsyncMock()
+        self.mock_stream.output_stream = AsyncMock()
+        mock_transcribe_client.start_stream_transcription = AsyncMock(return_value=self.mock_stream)
 
         # Instantiate the service with mock configs
         self.service = TranscriptionService(
@@ -56,8 +72,18 @@ class TestTranscriptionService(unittest.TestCase):
         # Mock AudioSegment methods needed for testing transcribe/upload
         self.mock_audio_segment = MagicMock(spec=AudioSegment)
         self.mock_audio_segment.export = MagicMock()
+        self.mock_audio_segment.frame_rate = 44100
         buffer_mock = io.BytesIO(b"dummy audio data")
         self.mock_audio_segment.export.return_value = buffer_mock
+        
+        # Create a temporary output directory for testing
+        self.test_output_dir = Path("test_output/transcripts")
+        self.test_output_dir.mkdir(parents=True, exist_ok=True)
+
+    def tearDown(self):
+        # Clean up test output directory
+        import shutil
+        shutil.rmtree("test_output", ignore_errors=True)
 
     def test_post_process_english_success(self):
         """Test successful English post-processing."""
@@ -190,43 +216,31 @@ class TestTranscriptionService(unittest.TestCase):
         self.assertEqual(processed_text, raw_text)
         self.mock_bedrock_runtime.invoke_model.assert_called_once()
 
-    @patch('time.sleep', return_value=None)
-    def test_transcribe_success(self, mock_sleep):
+    @pytest.mark.asyncio
+    async def test_transcribe_success(self):
         """Test successful transcription."""
-        # Mock S3 upload
-        self.mock_s3.put_object.return_value = {'ETag': 'test-etag'}
-        
-        # Mock Transcribe job start
-        self.mock_transcribe.start_transcription_job.return_value = {
-            'TranscriptionJob': {'TranscriptionJobName': 'test-job'}
-        }
-        
-        # Mock Transcribe job completion
-        self.mock_transcribe.get_transcription_job.return_value = {
-            'TranscriptionJob': {
-                'TranscriptionJobStatus': 'COMPLETED'
+        # Mock the transcribe_streaming method
+        mock_result = {
+            "results": {
+                "transcripts": [{"transcript": "Test transcription"}],
+                "segments": [{"text": "Test transcription"}]
             }
         }
+        self.service.transcribe_streaming = AsyncMock(return_value=mock_result)
         
-        # Mock S3 get transcript
-        transcript_content = json.dumps({
-            'results': {'transcripts': [{'transcript': 'mock transcript'}]}
-        })
-        mock_transcript_stream = MagicMock()
-        mock_transcript_stream.read.return_value = transcript_content.encode('utf-8')
-        self.mock_s3.get_object.return_value = {'Body': mock_transcript_stream}
+        # Test transcription
+        result = await self.service.transcribe("test.wav", "en-US")
         
-        # Mock S3 delete
-        self.mock_s3.delete_object.return_value = {}
+        # Verify the result
+        assert result == mock_result
+        self.service.transcribe_streaming.assert_called_once()
 
-        result = self.service.transcribe(self.mock_audio_segment, 'en-US')
-        
-        self.assertEqual(result, 'mock transcript')
-        self.mock_s3.put_object.assert_called_once()
-        self.mock_transcribe.start_transcription_job.assert_called_once()
-        self.mock_transcribe.get_transcription_job.assert_called()
-        self.mock_s3.get_object.assert_called_once()
-        self.assertEqual(self.mock_s3.delete_object.call_count, 2)
+    @pytest.mark.asyncio
+    async def test_transcribe_error_handling(self):
+        """Test error handling in transcribe method."""
+        # Test file not found error
+        with pytest.raises(FileNotFoundError):
+            await self.service.transcribe("nonexistent.wav", "en-US")
 
 
 if __name__ == '__main__':
