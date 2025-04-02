@@ -49,8 +49,8 @@ htmlcov/
 
 # Logs
 *.log
-logs/
-log/
+demo/logs/*
+!demo/logs/.gitkeep
 
 # Output files
 output/

@@ -71,11 +71,20 @@ def test_save_recording(audio_handler, sample_audio_data):
 
 def test_process_upload(audio_handler, sample_audio_file):
     """Test processing uploaded audio file."""
-    processed_path = audio_handler.process_upload(sample_audio_file)
+    result = audio_handler.process_upload(sample_audio_file)
     
-    assert Path(processed_path).exists()
-    assert Path(processed_path).suffix == ".wav"
-    assert "upload_" in Path(processed_path).name
+    assert isinstance(result, dict)
+    assert 'playback' in result
+    assert 'transcription' in result
+    
+    # Check both files exist and are wav files
+    assert Path(result['playback']).exists()
+    assert Path(result['playback']).suffix == ".wav"
+    assert "playback_" in Path(result['playback']).name
+    
+    assert Path(result['transcription']).exists()
+    assert Path(result['transcription']).suffix == ".wav"
+    assert "transcription_" in Path(result['transcription']).name
 
 def test_get_audio_info(audio_handler, sample_audio_file):
     """Test getting audio file information."""

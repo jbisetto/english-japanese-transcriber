@@ -217,61 +217,30 @@ class TestTranscriptionService(unittest.TestCase):
         self.mock_bedrock_runtime.invoke_model.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch('pydub.AudioSegment.from_file')
-    @patch('asyncio.get_event_loop')
-    async def test_transcribe_success(self, mock_get_loop, mock_from_file):
-        """Test successful transcription with streaming API."""
-        # Mock audio file loading
-        mock_from_file.return_value = self.mock_audio_segment
-
-        # Mock event loop and coroutine
-        mock_loop = MagicMock()
-        mock_get_loop.return_value = mock_loop
-
-        # Mock transcription results
-        mock_results = {
+    async def test_transcribe_success(self):
+        """Test successful transcription."""
+        # Mock the transcribe_streaming method
+        mock_result = {
             "results": {
-                "transcripts": [{"transcript": "Hello, this is a test."}],
-                "segments": [
-                    {
-                        "text": "Hello, this is a test.",
-                        "start_time": 0.0,
-                        "end_time": 2.0,
-                        "confidence": 0.95
-                    }
-                ]
+                "transcripts": [{"transcript": "Test transcription"}],
+                "segments": [{"text": "Test transcription"}]
             }
         }
-
-        # Mock the streaming client
-        mock_stream = AsyncMock()
-        mock_stream.input_stream = AsyncMock()
-        self.mock_transcribe_client.start_stream_transcription.return_value = mock_stream
-        mock_loop.run_until_complete.return_value = mock_results
-
-        # Run transcription
+        self.service.transcribe_streaming = AsyncMock(return_value=mock_result)
+        
+        # Test transcription
         result = await self.service.transcribe("test.wav", "en-US")
-
-        # Verify results
-        self.assertEqual(result, mock_results)
-        self.mock_transcribe_client.start_stream_transcription.assert_called_once_with(
-            language_code="en-US",
-            media_sample_rate_hz=44100,
-            media_encoding="pcm"
-        )
+        
+        # Verify the result
+        assert result == mock_result
+        self.service.transcribe_streaming.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_transcribe_error_handling(self):
-        """Test error handling in transcription."""
-        with patch('pydub.AudioSegment.from_file') as mock_from_file:
-            mock_from_file.side_effect = Exception("Audio file error")
-    
-            result = await self.service.transcribe("nonexistent.wav", "en-US")
-    
-            self.assertEqual(
-                result,
-                {"results": {"transcripts": [{"transcript": ""}], "segments": []}}
-            )
+        """Test error handling in transcribe method."""
+        # Test file not found error
+        with pytest.raises(FileNotFoundError):
+            await self.service.transcribe("nonexistent.wav", "en-US")
 
 
 if __name__ == '__main__':

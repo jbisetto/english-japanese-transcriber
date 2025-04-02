@@ -18,12 +18,12 @@ from pydub import AudioSegment
 class TranscriptionResultHandler(TranscriptResultStreamHandler):
     """Handler for streaming transcription results."""
     
-    def __init__(self, output_path: str):
+    def __init__(self, output_path: str, transcript_result_stream=None):
         """Initialize the handler with an output path."""
         self.output_path = output_path
         self.results: List[Dict[str, Any]] = []
         self.is_partial = True
-        super().__init__()
+        super().__init__(transcript_result_stream)
     
     async def handle_transcript_event(self, transcript_event: TranscriptEvent):
         """Handle incoming transcription events."""
@@ -32,11 +32,12 @@ class TranscriptionResultHandler(TranscriptResultStreamHandler):
         for result in results:
             if not result.is_partial:
                 self.is_partial = False
+                alternative = result.alternatives[0]
                 transcript = {
-                    "text": result.alternatives[0].transcript,
+                    "text": alternative.transcript,
                     "start_time": result.start_time,
                     "end_time": result.end_time,
-                    "confidence": result.alternatives[0].confidence
+                    "confidence": getattr(alternative, 'confidence', 1.0)  # Default to 1.0 if confidence not provided
                 }
                 self.results.append(transcript)
     
@@ -72,7 +73,7 @@ class TranscriptionService:
         self.transcription_config = transcription_config
         
         # Initialize AWS clients
-        self.transcribe_client = TranscribeStreamingClient(region_name=aws_config.region_name)
+        self.transcribe_client = TranscribeStreamingClient(region=aws_config.region_name)
         self.bedrock_runtime = boto3.client('bedrock-runtime', region_name=aws_config.region_name)
         
         # Store model IDs for post-processing
@@ -100,7 +101,10 @@ class TranscriptionService:
         self,
         audio_segment: AudioSegment,
         language_code: str,
-        output_path: str
+        output_path: str,
+        identify_language: bool = False,
+        language_options: List[str] = None,
+        preferred_language: str = None
     ) -> Dict[str, Any]:
         """
         Transcribe audio using streaming API.
@@ -109,19 +113,27 @@ class TranscriptionService:
             audio_segment: The audio to transcribe
             language_code: Language code (e.g., "en-US", "ja-JP")
             output_path: Where to save the transcription results
+            identify_language: Whether to enable language identification
+            language_options: List of language codes to identify between (not used in streaming mode)
+            preferred_language: Preferred language for faster identification (not used in streaming mode)
 
         Returns:
             Dict containing the transcription results
         """
         # Start transcription stream
-        stream = await self.transcribe_client.start_stream_transcription(
-            language_code=language_code,
-            media_sample_rate_hz=audio_segment.frame_rate,
-            media_encoding="pcm"
-        )
+        stream_params = {
+            "media_sample_rate_hz": audio_segment.frame_rate,
+            "media_encoding": "pcm",
+            "enable_partial_results_stabilization": True,
+            "partial_results_stability": "high",
+            "language_code": language_code if language_code != "auto" else "en-US"  # Default to en-US if auto
+        }
         
-        # Set up handler
-        handler = TranscriptionResultHandler(output_path)
+        # Start transcription stream
+        stream = await self.transcribe_client.start_stream_transcription(**stream_params)
+        
+        # Set up handler with the stream
+        handler = TranscriptionResultHandler(output_path, stream.output_stream)
         
         # Process audio stream
         await asyncio.gather(
@@ -143,13 +155,23 @@ class TranscriptionService:
         else:
             return {"results": {"transcripts": [{"transcript": ""}], "segments": []}}
 
-    async def transcribe(self, audio_path: str, language_code: str) -> Dict[str, Any]:
+    async def transcribe(
+        self,
+        audio_path: str,
+        language_code: str,
+        identify_language: bool = False,
+        language_options: List[str] = None,
+        preferred_language: str = None
+    ) -> Dict[str, Any]:
         """
         Transcribe an audio file using streaming API.
 
         Args:
             audio_path: Path to the audio file
             language_code: Language code (e.g., "en-US", "ja-JP")
+            identify_language: Whether to enable language identification
+            language_options: List of language codes to identify between
+            preferred_language: Preferred language for faster identification
 
         Returns:
             Dict containing the transcription results
@@ -165,7 +187,15 @@ class TranscriptionService:
             output_path = str(output_dir / f"transcript_{timestamp}.json")
             
             # Run async transcription
-            results = await self.transcribe_streaming(audio_segment, language_code, output_path)
+            results = await self.transcribe_streaming(
+                audio_segment,
+                language_code,
+                output_path,
+                identify_language=identify_language,
+                language_options=language_options,
+                preferred_language=preferred_language
+            )
+            print(f"Debug - Transcription results: {json.dumps(results, indent=2)}")  # Debug log
             return results
 
         except Exception as e:

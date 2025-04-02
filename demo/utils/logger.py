@@ -6,6 +6,7 @@ This module provides:
 - Debug output formatting
 - Error tracking
 - Logging configuration management
+- Automatic cleanup of old log files
 """
 
 import os
@@ -13,7 +14,7 @@ import sys
 import logging
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Union, Dict, Any
 
 class DemoLogger:
@@ -45,7 +46,8 @@ class DemoLogger:
         """
         self.name = name
         self.level = self.LOG_LEVELS.get(level.upper(), logging.INFO)
-        self.log_dir = Path(log_dir) if log_dir else Path("logs")
+        # Use demo/logs as default directory
+        self.log_dir = Path(log_dir) if log_dir else Path(__file__).parent.parent / "logs"
         self.format_string = format_string or (
             "%(asctime)s [%(levelname)s] %(name)s: "
             "%(message)s (%(filename)s:%(lineno)d)"
@@ -63,6 +65,9 @@ class DemoLogger:
         
         # Track errors for debugging
         self.error_history = []
+        
+        # Clean up old logs
+        self._cleanup_old_logs()
     
     def _setup_handlers(self) -> None:
         """Set up console and file handlers."""
@@ -79,6 +84,26 @@ class DemoLogger:
         file_handler = logging.FileHandler(log_file)
         file_handler.setFormatter(logging.Formatter(self.format_string))
         self.logger.addHandler(file_handler)
+    
+    def _cleanup_old_logs(self) -> None:
+        """Clean up log files from previous days."""
+        if not self.log_dir.exists():
+            return
+            
+        today = datetime.now().date()
+        for log_file in self.log_dir.glob("*.log"):
+            try:
+                # Extract date from filename (format: name_YYYYMMDD.log)
+                file_date_str = log_file.stem.split('_')[-1]
+                file_date = datetime.strptime(file_date_str, "%Y%m%d").date()
+                
+                # Remove if not today's log
+                if file_date < today:
+                    log_file.unlink()
+                    
+            except (ValueError, IndexError):
+                # Skip files that don't match the expected format
+                continue
     
     def _track_error(self, level: int, msg: str, exc_info: Optional[Exception] = None) -> None:
         """Track errors for debugging purposes."""

@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 from typing import Union, Dict, List, Any, Optional
 from datetime import datetime, timedelta
+from ..utils.logger import DemoLogger
 
 class OutputFormatError(Exception):
     """Raised when output format validation fails."""
@@ -22,15 +23,19 @@ class OutputHandler:
     
     SUPPORTED_FORMATS = ['txt', 'json', 'srt']
     
-    def __init__(self, output_dir: str = "output"):
+    def __init__(self, output_dir: str = "demo/output", logger=None):
         """
         Initialize the output handler.
         
         Args:
             output_dir (str): Directory for output files
+            logger: Logger instance
         """
         self.output_dir = Path(output_dir)
+        self.transcripts_dir = self.output_dir / "transcripts"
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.transcripts_dir.mkdir(parents=True, exist_ok=True)
+        self.logger = logger or DemoLogger()
     
     def format_japanese_text(self, text: str) -> str:
         """
@@ -190,43 +195,134 @@ class OutputHandler:
             return "。\n".join(text) + "。"
         return str(text)
     
-    def save_output(
-        self,
-        transcription: Dict[str, Any],
-        format: str,
-        filename: Optional[str] = None
-    ) -> str:
-        """
-        Save transcription in specified format.
-        
-        Args:
-            transcription (Dict): Transcription data
-            format (str): Output format (txt, json, srt)
-            filename (str, optional): Base filename without extension
+    def format_output(self, transcription: Dict[str, Any], format: str = "txt") -> str:
+        """Format transcription output in the specified format."""
+        try:
+            self.logger.debug(f"Selected format: {format}")
             
-        Returns:
-            str: Path to saved file
+            if not transcription or "results" not in transcription:
+                return ""
             
-        Raises:
-            OutputFormatError: If format is not supported
-        """
-        format = format.lower()
-        if format not in self.SUPPORTED_FORMATS:
-            raise OutputFormatError(f"Unsupported output format: {format}")
+            # Check for empty results
+            if not transcription["results"].get("transcripts"):
+                return ""
+            
+            # Get the raw transcript text
+            raw_text = transcription["results"]["transcripts"][0]["transcript"]
+            self.logger.debug(f"Raw transcription text: {raw_text}")
+            
+            # Handle different output formats
+            if format.lower() == "txt":
+                self.logger.debug("Using TXT format: returning raw transcript text")
+                # Ensure proper spacing between languages
+                parts = []
+                current_text = ""
+                current_lang = None
+                
+                for segment in transcription["results"].get("segments", []):
+                    text = segment.get("text", "").strip()
+                    lang = segment.get("language")
+                    
+                    # If language changes, add current text to parts
+                    if lang != current_lang and current_text:
+                        parts.append(current_text.strip())
+                        current_text = ""
+                    
+                    # Add space for English, no space for Japanese
+                    if lang == "en-US":
+                        if current_text and not current_text.endswith(" "):
+                            current_text += " "
+                        current_text += text
+                        if not current_text.endswith(" "):
+                            current_text += " "
+                    else:  # Japanese
+                        current_text += text
+                    
+                    current_lang = lang
+                
+                # Add any remaining text
+                if current_text:
+                    parts.append(current_text.strip())
+                
+                return " ".join(parts).strip()
+            
+            elif format.lower() == "json":
+                self.logger.debug("Using JSON format")
+                # Create a clean copy of the transcription
+                clean_transcription = {
+                    "results": {
+                        "transcripts": transcription["results"]["transcripts"],
+                        "segments": []
+                    }
+                }
+                
+                # Clean up segments
+                for segment in transcription["results"].get("segments", []):
+                    clean_segment = {
+                        "start_time": segment.get("start_time", "0"),
+                        "end_time": segment.get("end_time", "0"),
+                        "text": segment.get("text", ""),
+                        "language": segment.get("language", "unknown"),
+                        "confidence": segment.get("confidence", 0)
+                    }
+                    clean_transcription["results"]["segments"].append(clean_segment)
+                
+                return json.dumps(clean_transcription, ensure_ascii=False, indent=2)
+            
+            elif format.lower() == "srt":
+                self.logger.debug("Using SRT format")
+                segments = transcription["results"].get("segments", [])
+                if not segments:
+                    return ""
+                
+                srt_parts = []
+                for i, segment in enumerate(segments, 1):
+                    start_time = float(segment.get("start_time", 0))
+                    end_time = float(segment.get("end_time", 0))
+                    text = segment.get("text", "").strip()
+                    
+                    if not text:
+                        continue
+                    
+                    # Format times as SRT timestamps (HH:MM:SS,mmm)
+                    start = str(timedelta(seconds=start_time)).replace(".", ",")[:11]
+                    end = str(timedelta(seconds=end_time)).replace(".", ",")[:11]
+                    
+                    srt_parts.extend([
+                        str(i),
+                        f"{start} --> {end}",
+                        text,
+                        ""  # Empty line between entries
+                    ])
+                
+                return "\n".join(srt_parts)
+            
+            else:
+                raise OutputFormatError(f"Unsupported output format: {format}")
+                
+        except Exception as e:
+            self.logger.error(f"Error formatting output: {str(e)}")
+            raise OutputFormatError(f"Failed to format output: {str(e)}")
+    
+    def save_output(self, transcription: Dict[str, Any], format: str = "txt") -> None:
+        """Save transcription output to a file."""
+        if not transcription:
+            return None
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"transcript_{timestamp}.{format}"
+        filepath = self.transcripts_dir / filename
+
+        formatted_output = self.format_output(transcription, format)
         
-        if filename is None:
-            filename = f"transcription_{datetime.now():%Y%m%d_%H%M%S}"
-        
-        output_path = self.output_dir / f"{filename}.{format}"
-        
-        content = {
-            'txt': lambda: self.format_as_txt(transcription),
-            'json': lambda: self.format_as_json(transcription),
-            'srt': lambda: self.format_as_srt(transcription)
-        }[format]()
-        
-        output_path.write_text(content, encoding='utf-8')
-        return str(output_path)
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(formatted_output)
+            self.logger.info(f"Saved output to {filepath}")
+            return str(filepath)
+        except Exception as e:
+            self.logger.error(f"Failed to save output: {e}")
+            return None
     
     def generate_preview(
         self,
@@ -252,46 +348,8 @@ class OutputHandler:
         if format not in self.SUPPORTED_FORMATS:
             raise OutputFormatError(f"Unsupported output format: {format}")
         
-        content = {
-            'txt': lambda: self.format_as_txt(transcription),
-            'json': lambda: self.format_as_json(transcription),
-            'srt': lambda: self.format_as_srt(transcription)
-        }[format]()
+        content = self.format_output(transcription, format)
         
         if len(content) > max_length:
             return content[:max_length] + "..."
-        return content
-    
-    def format_output(
-        self,
-        transcription: Dict[str, Any],
-        format: str = "txt",
-        language: str = "auto-detect"
-    ) -> str:
-        """Format the transcription output.
-        
-        Args:
-            transcription: The transcription data
-            format: Output format (txt, json, srt)
-            language: Language option for formatting
-            
-        Returns:
-            str: Formatted output
-            
-        Raises:
-            OutputFormatError: If format is invalid
-        """
-        if format not in ["txt", "json", "srt"]:
-            raise OutputFormatError(f"Invalid output format: {format}")
-            
-        if format == "txt":
-            if language == "force-japanese":
-                return self.format_as_txt_japanese(transcription)
-            else:
-                return self.format_as_txt_english(transcription)
-                
-        elif format == "json":
-            return self.format_as_json(transcription)
-            
-        else:  # srt
-            return self.format_as_srt(transcription) 
+        return content 
