@@ -122,7 +122,3 @@ The project includes a comprehensive test suite:
 python -m pytest -v  # Run all tests
 python -m pytest tests/test_audio_handler.py -v  # Run specific test file
 ```
-
-## Contributing
-
-Contributions are welcome! Please read our contributing guidelines and code of conduct.
