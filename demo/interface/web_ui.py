@@ -51,7 +51,7 @@ class TranscriptionUI:
         """Clear all output and recording files except .gitkeep."""
         try:
             # Clear output files
-            output_dir = Path("demo/output")
+            output_dir = Path("output")
             transcripts_dir = output_dir / "transcripts"
             
             # Create directories if they don't exist
@@ -68,8 +68,8 @@ class TranscriptionUI:
                 if file.is_file() and file.name != ".gitkeep":
                     file.unlink()
             
-            # Clear recording files from demo/recordings
-            recordings_dir = Path("demo/recordings")
+            # Clear recording files
+            recordings_dir = Path("recordings")
             recordings_dir.mkdir(parents=True, exist_ok=True)
             for file in recordings_dir.glob("*"):
                 if file.is_file() and file.name != ".gitkeep":
