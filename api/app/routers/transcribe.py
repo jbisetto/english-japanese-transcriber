@@ -102,14 +102,8 @@ async def transcribe_audio(file: UploadFile = File(...)):
             audio_segment = audio_handler.process_audio(file_path)
             logger.info("Audio processed successfully")
             
-            # Prepare output path for transcription result
-            output_filename = f"{os.path.splitext(unique_filename)[0]}.json"
-            output_path = os.path.join(RESULTS_DIR, output_filename)
-            
-            # Set language code - for proper mixed language detection, 
-            # normally this would be determined by a language detector
-            # For demonstration, we'll just try "en-US" since we have a simplified MVP
-            language_code = "en-US"
+            # Set language code - enable automatic language detection
+            language_code = "auto"
             
             # Transcribe the audio - directly await the coroutine
             logger.info("Starting transcription with language code: " + language_code)
@@ -117,7 +111,7 @@ async def transcribe_audio(file: UploadFile = File(...)):
             transcription_result = await transcription_service.transcribe_streaming(
                 audio_segment=audio_segment,
                 language_code=language_code,
-                output_path=output_path
+                output_path=None  # No need to save to file
             )
             logger.info(f"Transcription completed. Result has {len(transcription_result.get('results', {}).get('segments', []))} segments")
             
@@ -126,14 +120,13 @@ async def transcribe_audio(file: UploadFile = File(...)):
             if transcription_result and "results" in transcription_result:
                 if "segments" in transcription_result["results"]:
                     for segment in transcription_result["results"]["segments"]:
-                        # Detect language from segment (in a real implementation, this would 
-                        # come from a proper language detector)
-                        # For demo purposes, default to English
+                        # For MVP, default to English
                         language = "en"
                         
-                        # Post-process text if there's content
+                        # Get the text content
                         text = segment.get("text", "")
                         if text:
+                            # Post-process text if there's content
                             processed_text = transcription_service.post_process_text(text, language)
                             
                             # Add to transcripts

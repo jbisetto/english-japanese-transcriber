@@ -43,7 +43,7 @@ class TranscriptionResultHandler(TranscriptResultStreamHandler):
     
     def save_results(self):
         """Save the transcription results to a file."""
-        if not self.results:
+        if not self.results or self.output_path is None:
             return
             
         # Create output directory if it doesn't exist
