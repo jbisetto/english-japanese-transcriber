@@ -1,64 +1,33 @@
-# REST API Docker Implementation Tasks
+# REST API Docker Implementation Tasks - MVP
 
 ## Overview
-This task list outlines the steps required to expose the English-Japanese Transcriber as a REST API service packaged in Docker.
+This task list outlines the minimal steps required to expose the English-Japanese Transcriber as a REST API service packaged in Docker for local MVP usage.
 
 ## Tasks
 
 ### 1. Create REST API Framework
-- [ ] Choose a Python web framework (Flask or FastAPI recommended)
-- [ ] Set up basic project structure for API
-- [ ] Create API endpoints for transcription services
-- [ ] Implement request validation and error handling
-- [ ] Add API documentation (Swagger/OpenAPI)
+- [x] Choose a Python web framework (Flask or FastAPI recommended)
+- [x] Set up basic project structure for API
+- [x] Create minimal API endpoints for transcription services
+- [x] Implement basic request validation and error handling
 
-### 2. Implement API Endpoints
-- [ ] POST `/api/transcribe` - Upload and transcribe audio file
-- [ ] GET `/api/jobs/{job_id}` - Check status of transcription job
-- [ ] GET `/api/jobs/{job_id}/result` - Retrieve completed transcription
-- [ ] GET `/api/health` - API health check endpoint
-- [ ] POST `/api/configure` - Update transcription settings
+### 2. Implement API Endpoints (MVP)
+- [x] POST `/api/transcribe` - Upload and transcribe audio file
+- [x] GET `/api/health` - API health check endpoint
 
-### 3. Add Asynchronous Processing
-- [ ] Implement job queue system
-- [ ] Add background worker for processing transcriptions
-- [ ] Create job status tracking mechanism
-- [ ] Implement webhook notifications for job completion (optional)
+### 3. Create Docker Configuration
+- [x] Create Dockerfile for the application
+- [x] Set up docker-compose.yml for local development
+- [x] Configure environment variables
+- [x] Implement basic health checks for container
 
-### 4. Create Docker Configuration
-- [ ] Create Dockerfile for the application
-- [ ] Set up docker-compose.yml for local development
-- [ ] Configure environment variables and secrets management
-- [ ] Optimize Docker image size and build process
-- [ ] Implement health checks for container
+### 4. Add Data Storage
+- [x] Add simple file storage for uploaded audio and results
 
-### 5. Add Data Persistence
-- [ ] Select database for job and result storage (SQLite/PostgreSQL)
-- [ ] Implement data models for transcription jobs
-- [ ] Add file storage for uploaded audio and results
-- [ ] Implement database migrations
+### 5. Testing
+- [x] Basic testing for API endpoints
+- [x] Test Docker deployment locally
 
-### 6. Security Implementation
-- [ ] Add authentication mechanism (API keys or JWT)
-- [ ] Implement authorization for API endpoints
-- [ ] Add rate limiting and request throttling
-- [ ] Configure CORS policy
-- [ ] Implement secure file upload validation
-
-### 7. Testing
-- [ ] Create unit tests for API endpoints
-- [ ] Implement integration tests with transcription engine
-- [ ] Add load testing for API performance
-- [ ] Test Docker deployment and scaling
-
-### 8. Documentation
-- [ ] Create API usage documentation
-- [ ] Document Docker deployment process
-- [ ] Add configuration options documentation
-- [ ] Create example client implementation
-
-### 9. Deployment
-- [ ] Create deployment scripts/workflows
-- [ ] Configure logging and monitoring
-- [ ] Set up CI/CD pipeline for automated builds
-- [ ] Document scaling considerations 
+### 6. Documentation
+- [x] Create minimal API usage documentation
+- [x] Document local Docker deployment process 

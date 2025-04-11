@@ -1,0 +1,26 @@
+version: '3'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src
+      - ./api:/app/api
+      - ./uploads:/app/api/uploads
+      - ./results:/app/api/results
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION_NAME}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET}
+      - TARGET_SAMPLE_RATE=16000
+      - TARGET_CHANNELS=1
+      - OUTPUT_DIR=output
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s 

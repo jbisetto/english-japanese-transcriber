@@ -1,0 +1,17 @@
+{
+  "results": {
+    "transcripts": [
+      {
+        "transcript": "I know, this is a sample text. The weather is nice today."
+      }
+    ],
+    "segments": [
+      {
+        "text": "I know, this is a sample text. The weather is nice today.",
+        "start_time": 0.126,
+        "end_time": 8.647,
+        "confidence": 1.0
+      }
+    ]
+  }
+}
